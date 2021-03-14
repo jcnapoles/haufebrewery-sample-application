@@ -1,0 +1,43 @@
+{
+  "name": "Manufacturer",
+  "fields": [
+    {
+      "fieldName": "manufacturerName",
+      "fieldType": "String"
+    }
+  ],
+  "relationships": [
+    {
+      "relationshipType": "one-to-one",
+      "otherEntityName": "user",
+      "otherEntityRelationshipName": "manufacturer",
+      "relationshipName": "internalUser",
+      "otherEntityField": "id",
+      "ownerSide": true
+    },
+    {
+      "relationshipType": "one-to-many",
+      "otherEntityName": "beer",
+      "otherEntityRelationshipName": "manufaturer",
+      "relationshipName": "beer"
+    },
+    {
+      "relationshipType": "many-to-one",
+      "otherEntityName": "country",
+      "otherEntityRelationshipName": "manufacturer",
+      "relationshipName": "country",
+      "otherEntityField": "id"
+    }
+  ],
+  "changelogDate": "20210313230457",
+  "entityTableName": "manufacturer",
+  "dto": "no",
+  "pagination": "pagination",
+  "service": "no",
+  "jpaMetamodelFiltering": false,
+  "fluentMethods": true,
+  "readOnly": false,
+  "embedded": false,
+  "clientRootFolder": "",
+  "applications": "*"
+}

@@ -1,0 +1,28 @@
+{
+  "haufebreweryApp": {
+    "beer": {
+      "home": {
+        "title": "Beers",
+        "createLabel": "Crear nuevo Beer",
+        "createOrEditLabel": "Crear o editar Beer",
+        "search": "Buscar Beer",
+        "notFound": "Ningún Beers encontrado"
+      },
+      "created": "Un nuevo Beer ha sido creado con el identificador {{ param }}",
+      "updated": "Un Beer ha sido actualizado con el identificador {{ param }}",
+      "deleted": "Un Beer ha sido eliminado con el identificador {{ param }}",
+      "delete": {
+        "question": "¿Seguro que quiere eliminar Beer {{ id }}?"
+      },
+      "detail": {
+        "title": "Beer"
+      },
+      "beerName": "Beer Name",
+      "graduation": "Graduation",
+      "type": "Type",
+      "description": "Description",
+      "image": "Image",
+      "manufaturer": "Manufaturer"
+    }
+  }
+}

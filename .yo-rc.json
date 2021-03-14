@@ -1,0 +1,43 @@
+{
+  "generator-jhipster": {
+    "promptValues": {
+      "packageName": "com.haufegroup.haufebrewery",
+      "nativeLanguage": "en"
+    },
+    "jhipsterVersion": "6.10.4",
+    "applicationType": "monolith",
+    "baseName": "haufebrewery",
+    "packageName": "com.haufegroup.haufebrewery",
+    "packageFolder": "com/haufegroup/haufebrewery",
+    "serverPort": "8080",
+    "authenticationType": "jwt",
+    "cacheProvider": "ehcache",
+    "enableHibernateCache": true,
+    "websocket": "spring-websocket",
+    "databaseType": "sql",
+    "devDatabaseType": "mysql",
+    "prodDatabaseType": "mysql",
+    "searchEngine": "elasticsearch",
+    "messageBroker": false,
+    "serviceDiscoveryType": "eureka",
+    "buildTool": "maven",
+    "enableSwaggerCodegen": true,
+    "jwtSecretKey": "MzRlNzk1YzI4YTQ2ODAwZDQ2MmJjM2IxYTE0NmJiMDQ2ODY3OTYxNzAzMWY1Mzg1Zjk4ZjYxM2Q5ODkzM2VkOTU2ZGQxZDg1MTY5Y2IwY2ZlZjUyZTI3OGJiOGU1NWU1ZTlkNDU4ODA5N2I3ZTNmZDUwY2I3MzI0YmM3NTBhNTM=",
+    "embeddableLaunchScript": false,
+    "useSass": true,
+    "clientPackageManager": "npm",
+    "clientFramework": "react",
+    "clientTheme": "darkly",
+    "clientThemeVariant": "primary",
+    "creationTimestamp": 1615676002632,
+    "testFrameworks": [],
+    "jhiPrefix": "jhi",
+    "entitySuffix": "",
+    "dtoSuffix": "DTO",
+    "otherModules": [],
+    "enableTranslation": true,
+    "nativeLanguage": "en",
+    "languages": ["en", "es"],
+    "blueprints": []
+  }
+}

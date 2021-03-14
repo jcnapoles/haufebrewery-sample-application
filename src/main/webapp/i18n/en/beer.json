@@ -1,0 +1,28 @@
+{
+  "haufebreweryApp": {
+    "beer": {
+      "home": {
+        "title": "Beers",
+        "createLabel": "Create a new Beer",
+        "createOrEditLabel": "Create or edit a Beer",
+        "search": "Search for Beer",
+        "notFound": "No Beers found"
+      },
+      "created": "A new Beer is created with identifier {{ param }}",
+      "updated": "A Beer is updated with identifier {{ param }}",
+      "deleted": "A Beer is deleted with identifier {{ param }}",
+      "delete": {
+        "question": "Are you sure you want to delete Beer {{ id }}?"
+      },
+      "detail": {
+        "title": "Beer"
+      },
+      "beerName": "Beer Name",
+      "graduation": "Graduation",
+      "type": "Type",
+      "description": "Description",
+      "image": "Image",
+      "manufaturer": "Manufaturer"
+    }
+  }
+}

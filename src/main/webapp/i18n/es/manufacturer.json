@@ -1,0 +1,26 @@
+{
+  "haufebreweryApp": {
+    "manufacturer": {
+      "home": {
+        "title": "Manufacturers",
+        "createLabel": "Crear nuevo Manufacturer",
+        "createOrEditLabel": "Crear o editar Manufacturer",
+        "search": "Buscar Manufacturer",
+        "notFound": "Ningún Manufacturers encontrado"
+      },
+      "created": "Un nuevo Manufacturer ha sido creado con el identificador {{ param }}",
+      "updated": "Un Manufacturer ha sido actualizado con el identificador {{ param }}",
+      "deleted": "Un Manufacturer ha sido eliminado con el identificador {{ param }}",
+      "delete": {
+        "question": "¿Seguro que quiere eliminar Manufacturer {{ id }}?"
+      },
+      "detail": {
+        "title": "Manufacturer"
+      },
+      "manufacturerName": "Manufacturer Name",
+      "internalUser": "Internal User",
+      "beer": "Beer",
+      "country": "Country"
+    }
+  }
+}
