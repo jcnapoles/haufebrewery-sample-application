@@ -20,7 +20,7 @@ export const CountryUpdate = (props: ICountryUpdateProps) => {
   const { countryEntity, loading, updating } = props;
 
   const handleClose = () => {
-    props.history.push('/country');
+    props.history.push('/country' + props.location.search);
   };
 
   useEffect(() => {

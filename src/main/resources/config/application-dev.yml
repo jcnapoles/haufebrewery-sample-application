@@ -146,3 +146,8 @@ jhipster:
 # ===================================================================
 
 # application:
+punkapi:
+  url: https://api.punkapi.com/v2/beers
+
+restcountries:
+  url: https://restcountries.eu/rest/v2/

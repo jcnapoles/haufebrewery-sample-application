@@ -1,33 +1,52 @@
 package com.haufegroup.haufebrewery.web.rest;
 
+import static org.elasticsearch.index.query.QueryBuilders.queryStringQuery;
+
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.time.Instant;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import org.zalando.problem.Status;
+
+import com.haufegroup.haufebrewery.domain.Authority;
 import com.haufegroup.haufebrewery.domain.Manufacturer;
+import com.haufegroup.haufebrewery.domain.User;
 import com.haufegroup.haufebrewery.repository.ManufacturerRepository;
+import com.haufegroup.haufebrewery.repository.UserRepository;
 import com.haufegroup.haufebrewery.repository.search.ManufacturerSearchRepository;
+import com.haufegroup.haufebrewery.security.AuthoritiesConstants;
 import com.haufegroup.haufebrewery.web.rest.errors.BadRequestAlertException;
 
 import io.github.jhipster.web.util.HeaderUtil;
 import io.github.jhipster.web.util.PaginationUtil;
 import io.github.jhipster.web.util.ResponseUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.*;
-
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
-
-import static org.elasticsearch.index.query.QueryBuilders.*;
 
 /**
  * REST controller for managing {@link com.haufegroup.haufebrewery.domain.Manufacturer}.
@@ -47,6 +66,11 @@ public class ManufacturerResource {
     private final ManufacturerRepository manufacturerRepository;
 
     private final ManufacturerSearchRepository manufacturerSearchRepository;
+    
+       
+    @Autowired
+    private UserRepository userRepository;   
+    
 
     public ManufacturerResource(ManufacturerRepository manufacturerRepository, ManufacturerSearchRepository manufacturerSearchRepository) {
         this.manufacturerRepository = manufacturerRepository;
@@ -61,11 +85,31 @@ public class ManufacturerResource {
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PostMapping("/manufacturers")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
     public ResponseEntity<Manufacturer> createManufacturer(@RequestBody Manufacturer manufacturer) throws URISyntaxException {
         log.debug("REST request to save Manufacturer : {}", manufacturer);
         if (manufacturer.getId() != null) {
             throw new BadRequestAlertException("A new manufacturer cannot already have an ID", ENTITY_NAME, "idexists");
         }
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+		String userLogged = auth.getName();
+        
+        User user = new User();
+        user.setActivated(true);
+        user.setCreatedBy(userLogged);       
+        user.setCreatedDate(Instant.now());
+        user.setEmail("prueba@gmail.com");
+        user.setFirstName(manufacturer.getManufacturerName());
+        user.setLastName(manufacturer.getManufacturerName());
+        user.setLogin(manufacturer.getManufacturerName());
+        user.setPassword(manufacturer.getManufacturerName());
+        Set<Authority> authorities = new HashSet<Authority>();
+        Authority authority = new Authority();
+        authority.setName("ROLE_USER");
+        authorities.add(authority);
+        user.setAuthorities(authorities);
+        userRepository.save(user);
+        manufacturer.setInternalUser(user);
         Manufacturer result = manufacturerRepository.save(manufacturer);
         manufacturerSearchRepository.save(result);
         return ResponseEntity.created(new URI("/api/manufacturers/" + result.getId()))
@@ -82,18 +126,35 @@ public class ManufacturerResource {
      * or with status {@code 500 (Internal Server Error)} if the manufacturer couldn't be updated.
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
-    @PutMapping("/manufacturers")
-    public ResponseEntity<Manufacturer> updateManufacturer(@RequestBody Manufacturer manufacturer) throws URISyntaxException {
-        log.debug("REST request to update Manufacturer : {}", manufacturer);
-        if (manufacturer.getId() == null) {
-            throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
-        }
-        Manufacturer result = manufacturerRepository.save(manufacturer);
-        manufacturerSearchRepository.save(result);
-        return ResponseEntity.ok()
-            .headers(HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, manufacturer.getId().toString()))
-            .body(result);
-    }
+	@PutMapping("/manufacturers")
+	@PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.USER + "\")")
+	public ResponseEntity<Manufacturer> updateManufacturer(@RequestBody Manufacturer manufacturer)
+			throws URISyntaxException {
+		log.debug("REST request to update Manufacturer : {}", manufacturer);
+		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+		String user = auth.getName();
+		Optional<Manufacturer> manufacturerBD = manufacturerRepository.findById(manufacturer.getId());
+
+		if (!manufacturerBD.isEmpty()) {
+			User internalUser = manufacturerBD.get().getInternalUser();
+			if (internalUser != null) {
+				if (user.equalsIgnoreCase(internalUser.getLogin())) {
+					if (manufacturer.getId() == null) {
+						throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
+					}
+					manufacturer.setInternalUser(internalUser);
+					Manufacturer result = manufacturerRepository.save(manufacturer);
+					manufacturerSearchRepository.save(result);
+					return ResponseEntity.ok().headers(HeaderUtil.createEntityUpdateAlert(applicationName, true,
+							ENTITY_NAME, manufacturer.getId().toString())).body(result);
+				}
+			}
+
+		}
+
+		throw new AccessDeniedException(Status.FORBIDDEN.name());
+
+	}
 
     /**
      * {@code GET  /manufacturers} : get all the manufacturers.
@@ -129,6 +190,7 @@ public class ManufacturerResource {
      * @return the {@link ResponseEntity} with status {@code 204 (NO_CONTENT)}.
      */
     @DeleteMapping("/manufacturers/{id}")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
     public ResponseEntity<Void> deleteManufacturer(@PathVariable Long id) {
         log.debug("REST request to delete Manufacturer : {}", id);
         manufacturerRepository.deleteById(id);

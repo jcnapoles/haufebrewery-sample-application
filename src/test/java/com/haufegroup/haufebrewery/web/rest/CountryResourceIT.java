@@ -13,6 +13,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
@@ -261,8 +263,8 @@ public class CountryResourceIT {
         // Configure the mock search repository
         // Initialize the database
         countryRepository.saveAndFlush(country);
-        when(mockCountrySearchRepository.search(queryStringQuery("id:" + country.getId())))
-            .thenReturn(Collections.singletonList(country));
+        when(mockCountrySearchRepository.search(queryStringQuery("id:" + country.getId()), PageRequest.of(0, 20)))
+            .thenReturn(new PageImpl<>(Collections.singletonList(country), PageRequest.of(0, 1), 1));
 
         // Search the country
         restCountryMockMvc.perform(get("/api/_search/countries?query=id:" + country.getId()))

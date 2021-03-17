@@ -25,7 +25,7 @@
   "changelogDate": "20210313230557",
   "entityTableName": "country",
   "dto": "no",
-  "pagination": "no",
+  "pagination": "pagination",
   "service": "no",
   "jpaMetamodelFiltering": false,
   "fluentMethods": true,

@@ -1,36 +1,55 @@
 package com.haufegroup.haufebrewery.web.rest;
 
+import static org.elasticsearch.index.query.QueryBuilders.queryStringQuery;
+
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.List;
+import java.util.Optional;
+
+import javax.validation.Valid;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+import org.zalando.problem.Status;
+
 import com.haufegroup.haufebrewery.domain.Beer;
+import com.haufegroup.haufebrewery.domain.Manufacturer;
+import com.haufegroup.haufebrewery.domain.User;
+import com.haufegroup.haufebrewery.integration.PunkApi;
 import com.haufegroup.haufebrewery.repository.BeerRepository;
+import com.haufegroup.haufebrewery.repository.ManufacturerRepository;
 import com.haufegroup.haufebrewery.repository.search.BeerSearchRepository;
+import com.haufegroup.haufebrewery.repository.search.ManufacturerSearchRepository;
 import com.haufegroup.haufebrewery.security.AuthoritiesConstants;
 import com.haufegroup.haufebrewery.web.rest.errors.BadRequestAlertException;
 
 import io.github.jhipster.web.util.HeaderUtil;
 import io.github.jhipster.web.util.PaginationUtil;
 import io.github.jhipster.web.util.ResponseUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-import org.springframework.http.ResponseEntity;
-import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.*;
-
-import javax.validation.Valid;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
-
-import static org.elasticsearch.index.query.QueryBuilders.*;
 
 /**
  * REST controller for managing {@link com.haufegroup.haufebrewery.domain.Beer}.
@@ -49,7 +68,16 @@ public class BeerResource {
 
     private final BeerRepository beerRepository;
 
-    private final BeerSearchRepository beerSearchRepository;
+    private final BeerSearchRepository beerSearchRepository;  
+    
+    @Autowired
+    private Environment environment;
+    
+    @Autowired
+    private ManufacturerRepository manufacturerRepository;
+    
+    @Autowired
+    private ManufacturerSearchRepository manufacturerSearchRepository;
 
     public BeerResource(BeerRepository beerRepository, BeerSearchRepository beerSearchRepository) {
         this.beerRepository = beerRepository;
@@ -70,11 +98,51 @@ public class BeerResource {
         if (beer.getId() != null) {
             throw new BadRequestAlertException("A new beer cannot already have an ID", ENTITY_NAME, "idexists");
         }
-        Beer result = beerRepository.save(beer);
-        beerSearchRepository.save(result);
-        return ResponseEntity.created(new URI("/api/beers/" + result.getId()))
-            .headers(HeaderUtil.createEntityCreationAlert(applicationName, true, ENTITY_NAME, result.getId().toString()))
-            .body(result);
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+		String user = auth.getName();
+        Manufacturer manufacturer = beer.getManufaturer();
+        if (manufacturer != null) {
+        	Optional<Manufacturer> manufacturerBD = manufacturerRepository.findById(manufacturer.getId());
+			if (!manufacturerBD.isEmpty()) {
+				manufacturer = manufacturerBD.get();
+				User internalUser = manufacturer.getInternalUser();
+				if (internalUser != null) {
+					if (user.equalsIgnoreCase(internalUser.getLogin())) {						
+							beer.setManufaturer(manufacturer);
+						 	Beer result = beerRepository.save(beer);
+					        beerSearchRepository.save(result);
+					        return ResponseEntity.created(new URI("/api/beers/" + result.getId()))
+					            .headers(HeaderUtil.createEntityCreationAlert(applicationName, true, ENTITY_NAME, result.getId().toString()))
+					            .body(result);
+					}
+				}
+
+			}
+		} else {			
+			/*Search Manufacturer by user*/
+			Optional<Manufacturer> manufacturerBD = manufacturerRepository.findOneByManufacturerName(user);
+			
+			manufacturer = manufacturerBD.get();
+			if (!manufacturerBD.isEmpty()) {
+				User internalUser = manufacturer.getInternalUser();
+				if (internalUser != null) {
+					if (user.equalsIgnoreCase(internalUser.getLogin())) {
+						beer.setManufaturer(manufacturer);
+						Beer result = beerRepository.save(beer);
+						beerSearchRepository.save(result);
+						return ResponseEntity.created(new URI("/api/beers/" + result.getId()))
+								.headers(HeaderUtil.createEntityCreationAlert(applicationName, true, ENTITY_NAME,
+										result.getId().toString()))
+								.body(result);
+					}
+				}
+
+			}
+			
+		}
+        
+        throw new AccessDeniedException(Status.FORBIDDEN.name() +  " does not have the necessary permissions " + ENTITY_NAME); 
+        
     }
 
     /**
@@ -90,14 +158,37 @@ public class BeerResource {
     @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.USER + "\")")
     public ResponseEntity<Beer> updateBeer(@Valid @RequestBody Beer beer) throws URISyntaxException {
         log.debug("REST request to update Beer : {}", beer);
-        if (beer.getId() == null) {
-            throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
-        }
-        Beer result = beerRepository.save(beer);
-        beerSearchRepository.save(result);
-        return ResponseEntity.ok()
-            .headers(HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, beer.getId().toString()))
-            .body(result);
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+		String user = auth.getName();        
+        Optional<Beer> optionalBeer = beerRepository.findById(beer.getId());
+        Beer beerDB = new Beer();
+        if (!optionalBeer.isEmpty()) {
+        	beerDB = optionalBeer.get();
+			Manufacturer manufacturer = beerDB.getManufaturer();
+			Optional<Manufacturer> manufacturerBD = manufacturerRepository.findById(manufacturer.getId());
+			if (!manufacturerBD.isEmpty()) {
+				manufacturer = manufacturerBD.get();
+				User internalUser = manufacturer.getInternalUser();
+				if (internalUser != null) {
+					if (user.equalsIgnoreCase(internalUser.getLogin())) {
+						
+						 if (beer.getId() == null) {
+					            throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
+					        }
+					        Beer result = beerRepository.save(beer);
+					        beerSearchRepository.save(result);
+					        return ResponseEntity.ok()
+					            .headers(HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, beer.getId().toString()))
+					            .body(result);
+					}
+				}
+
+			}
+		} else {
+
+		}
+        		
+        throw new AccessDeniedException(Status.FORBIDDEN.name() +  " forbidden to modify this " + ENTITY_NAME);
     }
 
     /**
@@ -155,8 +246,12 @@ public class BeerResource {
         log.debug("REST request to search for a page of Beers for query {}", query);
         Page<Beer> page = beerSearchRepository.search(queryStringQuery(query), pageable);
         
-        /*Implement the consumption of the punkapi api*/
-        
+        if (page.getTotalElements() == 0) {        	
+            PunkApi punkApi = new PunkApi(environment,beerRepository,beerSearchRepository,manufacturerRepository,manufacturerSearchRepository);
+            List<Beer> beerList = punkApi.getBeersFromPunkApi(query);
+            page = new PageImpl<Beer>(beerList);
+		}
+       
         HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
         return ResponseEntity.ok().headers(headers).body(page.getContent());
         }

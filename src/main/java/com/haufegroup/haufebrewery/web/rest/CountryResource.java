@@ -1,27 +1,45 @@
 package com.haufegroup.haufebrewery.web.rest;
 
-import com.haufegroup.haufebrewery.domain.Country;
-import com.haufegroup.haufebrewery.repository.CountryRepository;
-import com.haufegroup.haufebrewery.repository.search.CountrySearchRepository;
-import com.haufegroup.haufebrewery.web.rest.errors.BadRequestAlertException;
-
-import io.github.jhipster.web.util.HeaderUtil;
-import io.github.jhipster.web.util.ResponseUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.*;
+import static org.elasticsearch.index.query.QueryBuilders.queryStringQuery;
 
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
-import static org.elasticsearch.index.query.QueryBuilders.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
+
+import com.haufegroup.haufebrewery.domain.Country;
+import com.haufegroup.haufebrewery.integration.RestCountries;
+import com.haufegroup.haufebrewery.repository.CountryRepository;
+import com.haufegroup.haufebrewery.repository.search.CountrySearchRepository;
+import com.haufegroup.haufebrewery.security.AuthoritiesConstants;
+import com.haufegroup.haufebrewery.web.rest.errors.BadRequestAlertException;
+
+import io.github.jhipster.web.util.HeaderUtil;
+import io.github.jhipster.web.util.PaginationUtil;
+import io.github.jhipster.web.util.ResponseUtil;
 
 /**
  * REST controller for managing {@link com.haufegroup.haufebrewery.domain.Country}.
@@ -41,6 +59,9 @@ public class CountryResource {
     private final CountryRepository countryRepository;
 
     private final CountrySearchRepository countrySearchRepository;
+    
+    @Autowired
+    private Environment environment;
 
     public CountryResource(CountryRepository countryRepository, CountrySearchRepository countrySearchRepository) {
         this.countryRepository = countryRepository;
@@ -55,6 +76,7 @@ public class CountryResource {
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PostMapping("/countries")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
     public ResponseEntity<Country> createCountry(@RequestBody Country country) throws URISyntaxException {
         log.debug("REST request to save Country : {}", country);
         if (country.getId() != null) {
@@ -77,6 +99,7 @@ public class CountryResource {
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PutMapping("/countries")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
     public ResponseEntity<Country> updateCountry(@RequestBody Country country) throws URISyntaxException {
         log.debug("REST request to update Country : {}", country);
         if (country.getId() == null) {
@@ -92,12 +115,15 @@ public class CountryResource {
     /**
      * {@code GET  /countries} : get all the countries.
      *
+     * @param pageable the pagination information.
      * @return the {@link ResponseEntity} with status {@code 200 (OK)} and the list of countries in body.
      */
     @GetMapping("/countries")
-    public List<Country> getAllCountries() {
-        log.debug("REST request to get all Countries");
-        return countryRepository.findAll();
+    public ResponseEntity<List<Country>> getAllCountries(Pageable pageable) {
+        log.debug("REST request to get a page of Countries");
+        Page<Country> page = countryRepository.findAll(pageable);
+        HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
+        return ResponseEntity.ok().headers(headers).body(page.getContent());
     }
 
     /**
@@ -120,6 +146,7 @@ public class CountryResource {
      * @return the {@link ResponseEntity} with status {@code 204 (NO_CONTENT)}.
      */
     @DeleteMapping("/countries/{id}")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
     public ResponseEntity<Void> deleteCountry(@PathVariable Long id) {
         log.debug("REST request to delete Country : {}", id);
         countryRepository.deleteById(id);
@@ -132,13 +159,20 @@ public class CountryResource {
      * to the query.
      *
      * @param query the query of the country search.
+     * @param pageable the pagination information.
      * @return the result of the search.
      */
     @GetMapping("/_search/countries")
-    public List<Country> searchCountries(@RequestParam String query) {
-        log.debug("REST request to search Countries for query {}", query);
-        return StreamSupport
-            .stream(countrySearchRepository.search(queryStringQuery(query)).spliterator(), false)
-        .collect(Collectors.toList());
-    }
+    public ResponseEntity<List<Country>> searchCountries(@RequestParam String query, Pageable pageable) {
+        log.debug("REST request to search for a page of Countries for query {}", query);
+        Page<Country> page = countrySearchRepository.search(queryStringQuery(query), pageable);
+        
+        if (page.getTotalElements() == 0) {        	
+            RestCountries restCountries = new RestCountries(environment,countryRepository,countrySearchRepository);
+            List<Country> countryList = restCountries.getCountrysFromApi(query);
+            page = new PageImpl<Country>(countryList);
+		}
+        HttpHeaders headers = PaginationUtil.generatePaginationHttpHeaders(ServletUriComponentsBuilder.fromCurrentRequest(), page);
+        return ResponseEntity.ok().headers(headers).body(page.getContent());
+        }
 }

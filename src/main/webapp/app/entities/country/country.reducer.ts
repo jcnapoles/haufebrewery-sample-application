@@ -22,6 +22,7 @@ const initialState = {
   entities: [] as ReadonlyArray<ICountry>,
   entity: defaultValue,
   updating: false,
+  totalItems: 0,
   updateSuccess: false,
 };
 
@@ -68,6 +69,7 @@ export default (state: CountryState = initialState, action): CountryState => {
         ...state,
         loading: false,
         entities: action.payload.data,
+        totalItems: parseInt(action.payload.headers['x-total-count'], 10),
       };
     case SUCCESS(ACTION_TYPES.FETCH_COUNTRY):
       return {
@@ -106,13 +108,16 @@ const apiSearchUrl = 'api/_search/countries';
 
 export const getSearchEntities: ICrudSearchAction<ICountry> = (query, page, size, sort) => ({
   type: ACTION_TYPES.SEARCH_COUNTRIES,
-  payload: axios.get<ICountry>(`${apiSearchUrl}?query=${query}`),
+  payload: axios.get<ICountry>(`${apiSearchUrl}?query=${query}${sort ? `&page=${page}&size=${size}&sort=${sort}` : ''}`),
 });
 
-export const getEntities: ICrudGetAllAction<ICountry> = (page, size, sort) => ({
-  type: ACTION_TYPES.FETCH_COUNTRY_LIST,
-  payload: axios.get<ICountry>(`${apiUrl}?cacheBuster=${new Date().getTime()}`),
-});
+export const getEntities: ICrudGetAllAction<ICountry> = (page, size, sort) => {
+  const requestUrl = `${apiUrl}${sort ? `?page=${page}&size=${size}&sort=${sort}` : ''}`;
+  return {
+    type: ACTION_TYPES.FETCH_COUNTRY_LIST,
+    payload: axios.get<ICountry>(`${requestUrl}${sort ? '&' : '?'}cacheBuster=${new Date().getTime()}`),
+  };
+};
 
 export const getEntity: ICrudGetAction<ICountry> = id => {
   const requestUrl = `${apiUrl}/${id}`;

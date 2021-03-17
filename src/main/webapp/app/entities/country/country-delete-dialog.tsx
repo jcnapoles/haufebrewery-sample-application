@@ -17,7 +17,7 @@ export const CountryDeleteDialog = (props: ICountryDeleteDialogProps) => {
   }, []);
 
   const handleClose = () => {
-    props.history.push('/country');
+    props.history.push('/country' + props.location.search);
   };
 
   useEffect(() => {
