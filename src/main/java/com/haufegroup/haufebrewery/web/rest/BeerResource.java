@@ -4,6 +4,8 @@ import static org.elasticsearch.index.query.QueryBuilders.queryStringQuery;
 
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,6 +24,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -42,6 +45,7 @@ import com.haufegroup.haufebrewery.domain.User;
 import com.haufegroup.haufebrewery.integration.PunkApi;
 import com.haufegroup.haufebrewery.repository.BeerRepository;
 import com.haufegroup.haufebrewery.repository.ManufacturerRepository;
+import com.haufegroup.haufebrewery.repository.UserRepository;
 import com.haufegroup.haufebrewery.repository.search.BeerSearchRepository;
 import com.haufegroup.haufebrewery.repository.search.ManufacturerSearchRepository;
 import com.haufegroup.haufebrewery.security.AuthoritiesConstants;
@@ -77,7 +81,11 @@ public class BeerResource {
     private ManufacturerRepository manufacturerRepository;
     
     @Autowired
-    private ManufacturerSearchRepository manufacturerSearchRepository;
+    private ManufacturerSearchRepository manufacturerSearchRepository;  
+   
+    
+    @Autowired
+    private UserRepository userRepository;
 
     public BeerResource(BeerRepository beerRepository, BeerSearchRepository beerSearchRepository) {
         this.beerRepository = beerRepository;
@@ -99,7 +107,16 @@ public class BeerResource {
             throw new BadRequestAlertException("A new beer cannot already have an ID", ENTITY_NAME, "idexists");
         }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-		String user = auth.getName();
+		String userLogged = auth.getName();
+		Collection<? extends GrantedAuthority> grantedAutorities =  auth.getAuthorities();		
+		Boolean granted = false;
+		for (Iterator<? extends GrantedAuthority> iterator = grantedAutorities.iterator(); iterator.hasNext();) {
+			GrantedAuthority grantedAuthority = (GrantedAuthority) iterator.next();
+			if (grantedAuthority.getAuthority().equalsIgnoreCase("ROLE_ADMIN")) {
+				granted = true;
+				break;
+			}
+		}
         Manufacturer manufacturer = beer.getManufaturer();
         if (manufacturer != null) {
         	Optional<Manufacturer> manufacturerBD = manufacturerRepository.findById(manufacturer.getId());
@@ -107,7 +124,7 @@ public class BeerResource {
 				manufacturer = manufacturerBD.get();
 				User internalUser = manufacturer.getInternalUser();
 				if (internalUser != null) {
-					if (user.equalsIgnoreCase(internalUser.getLogin())) {						
+					if (userLogged.equalsIgnoreCase(internalUser.getLogin()) || granted) {						
 							beer.setManufaturer(manufacturer);
 						 	Beer result = beerRepository.save(beer);
 					        beerSearchRepository.save(result);
@@ -118,15 +135,16 @@ public class BeerResource {
 				}
 
 			}
-		} else {			
-			/*Search Manufacturer by user*/
-			Optional<Manufacturer> manufacturerBD = manufacturerRepository.findOneByManufacturerName(user);
+		} else {
 			
-			manufacturer = manufacturerBD.get();
+			
+			/*Search Manufacturer by user*/
+			Optional<Manufacturer> manufacturerBD = manufacturerRepository.findOneByManufacturerName(userLogged);		
 			if (!manufacturerBD.isEmpty()) {
+				manufacturer = manufacturerBD.get();
 				User internalUser = manufacturer.getInternalUser();
 				if (internalUser != null) {
-					if (user.equalsIgnoreCase(internalUser.getLogin())) {
+					if (userLogged.equalsIgnoreCase(internalUser.getLogin())) {
 						beer.setManufaturer(manufacturer);
 						Beer result = beerRepository.save(beer);
 						beerSearchRepository.save(result);
@@ -137,6 +155,28 @@ public class BeerResource {
 					}
 				}
 
+			} else {
+				manufacturer = new Manufacturer();
+				manufacturer.setManufacturerName(userLogged);
+				Optional<User> userOptional = userRepository.findOneByLogin(userLogged);	     
+		        User user = userOptional.get();
+		        manufacturer.setInternalUser(user);
+		        Manufacturer manufacturerNew = manufacturerRepository.save(manufacturer);
+				manufacturerSearchRepository.save(manufacturerNew);
+		       
+		        
+		        User internalUser = manufacturerNew.getInternalUser();
+				if (internalUser != null) {
+					if (userLogged.equalsIgnoreCase(internalUser.getLogin())) {
+						beer.setManufaturer(manufacturerNew);
+						Beer result = beerRepository.save(beer);
+						beerSearchRepository.save(result);
+						return ResponseEntity.created(new URI("/api/beers/" + result.getId()))
+								.headers(HeaderUtil.createEntityCreationAlert(applicationName, true, ENTITY_NAME,
+										result.getId().toString()))
+								.body(result);
+					}
+				}
 			}
 			
 		}
@@ -155,35 +195,57 @@ public class BeerResource {
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PutMapping("/beers")
-    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.USER + "\")")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.USER + "\") or hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
     public ResponseEntity<Beer> updateBeer(@Valid @RequestBody Beer beer) throws URISyntaxException {
         log.debug("REST request to update Beer : {}", beer);
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-		String user = auth.getName();        
+		String userLogged = auth.getName();  
+		Collection<? extends GrantedAuthority> grantedAutorities =  auth.getAuthorities();		
+		Boolean granted = false;
+		for (Iterator<? extends GrantedAuthority> iterator = grantedAutorities.iterator(); iterator.hasNext();) {
+			GrantedAuthority grantedAuthority = (GrantedAuthority) iterator.next();
+			if (grantedAuthority.getAuthority().equalsIgnoreCase("ROLE_ADMIN")) {
+				granted = true;
+				break;
+			}
+		}
+		if (beer.getId() == null) {
+			 throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
+		} 
         Optional<Beer> optionalBeer = beerRepository.findById(beer.getId());
         Beer beerDB = new Beer();
         if (!optionalBeer.isEmpty()) {
         	beerDB = optionalBeer.get();
 			Manufacturer manufacturer = beerDB.getManufaturer();
-			Optional<Manufacturer> manufacturerBD = manufacturerRepository.findById(manufacturer.getId());
-			if (!manufacturerBD.isEmpty()) {
-				manufacturer = manufacturerBD.get();
-				User internalUser = manufacturer.getInternalUser();
-				if (internalUser != null) {
-					if (user.equalsIgnoreCase(internalUser.getLogin())) {
-						
-						 if (beer.getId() == null) {
-					            throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
-					        }
-					        Beer result = beerRepository.save(beer);
-					        beerSearchRepository.save(result);
-					        return ResponseEntity.ok()
-					            .headers(HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, beer.getId().toString()))
-					            .body(result);
+			if (manufacturer == null) {
+				manufacturer = new Manufacturer();
+				manufacturer.setManufacturerName(userLogged);
+				Optional<User> userOptional = userRepository.findOneByLogin(userLogged);	     
+		        User user = userOptional.get();
+		        manufacturer.setInternalUser(user);
+		        Manufacturer manufacturerNew = manufacturerRepository.save(manufacturer);
+				manufacturerSearchRepository.save(manufacturerNew);
+				Optional<Manufacturer> manufacturerBD = manufacturerRepository.findById(manufacturerNew.getId());
+				if (!manufacturerBD.isEmpty()) {
+					manufacturer = manufacturerBD.get();
+					User internalUser = manufacturer.getInternalUser();
+					if (internalUser != null) {
+						if (userLogged.equalsIgnoreCase(internalUser.getLogin()) || granted) {
+							
+							 if (beer.getId() == null) {
+						            throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
+						        }
+						        Beer result = beerRepository.save(beer);
+						        beerSearchRepository.save(result);
+						        return ResponseEntity.ok()
+						            .headers(HeaderUtil.createEntityUpdateAlert(applicationName, true, ENTITY_NAME, beer.getId().toString()))
+						            .body(result);
+						}
 					}
-				}
 
-			}
+				}
+			} 
+			
 		} else {
 
 		}

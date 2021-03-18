@@ -5,7 +5,9 @@ import static org.elasticsearch.index.query.QueryBuilders.queryStringQuery;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -21,6 +23,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -35,13 +38,13 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 import org.zalando.problem.Status;
 
-import com.haufegroup.haufebrewery.domain.Authority;
 import com.haufegroup.haufebrewery.domain.Manufacturer;
 import com.haufegroup.haufebrewery.domain.User;
 import com.haufegroup.haufebrewery.repository.ManufacturerRepository;
-import com.haufegroup.haufebrewery.repository.UserRepository;
 import com.haufegroup.haufebrewery.repository.search.ManufacturerSearchRepository;
 import com.haufegroup.haufebrewery.security.AuthoritiesConstants;
+import com.haufegroup.haufebrewery.service.UserService;
+import com.haufegroup.haufebrewery.service.dto.UserDTO;
 import com.haufegroup.haufebrewery.web.rest.errors.BadRequestAlertException;
 
 import io.github.jhipster.web.util.HeaderUtil;
@@ -65,11 +68,10 @@ public class ManufacturerResource {
 
     private final ManufacturerRepository manufacturerRepository;
 
-    private final ManufacturerSearchRepository manufacturerSearchRepository;
-    
-       
+    private final ManufacturerSearchRepository manufacturerSearchRepository;      
+   
     @Autowired
-    private UserRepository userRepository;   
+    private UserService userService;
     
 
     public ManufacturerResource(ManufacturerRepository manufacturerRepository, ManufacturerSearchRepository manufacturerSearchRepository) {
@@ -92,25 +94,24 @@ public class ManufacturerResource {
             throw new BadRequestAlertException("A new manufacturer cannot already have an ID", ENTITY_NAME, "idexists");
         }
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-		String userLogged = auth.getName();
-        
-        User user = new User();
+		String userLogged = auth.getName();		
+		        
+        UserDTO userDto = new UserDTO();
+		userDto.setActivated(true);
+		userDto.setCreatedBy(userLogged);       
+		userDto.setCreatedDate(Instant.now());
+		userDto.setEmail(manufacturer.getManufacturerName() + "@gmail.com");
+		userDto.setFirstName(manufacturer.getManufacturerName());
+		userDto.setLastName(manufacturer.getManufacturerName());
+		userDto.setLogin(manufacturer.getManufacturerName());		
+        Set<String> authorities = new HashSet<String>();     
+        authorities.add("ROLE_USER");
+        userDto.setAuthorities(authorities);        
+        User user = userService.registerUser(userDto, manufacturer.getManufacturerName());
         user.setActivated(true);
-        user.setCreatedBy(userLogged);       
-        user.setCreatedDate(Instant.now());
-        user.setEmail("prueba@gmail.com");
-        user.setFirstName(manufacturer.getManufacturerName());
-        user.setLastName(manufacturer.getManufacturerName());
-        user.setLogin(manufacturer.getManufacturerName());
-        user.setPassword(manufacturer.getManufacturerName());
-        Set<Authority> authorities = new HashSet<Authority>();
-        Authority authority = new Authority();
-        authority.setName("ROLE_USER");
-        authorities.add(authority);
-        user.setAuthorities(authorities);
-        userRepository.save(user);
         manufacturer.setInternalUser(user);
         Manufacturer result = manufacturerRepository.save(manufacturer);
+        manufacturerRepository.save(result);
         manufacturerSearchRepository.save(result);
         return ResponseEntity.created(new URI("/api/manufacturers/" + result.getId()))
             .headers(HeaderUtil.createEntityCreationAlert(applicationName, true, ENTITY_NAME, result.getId().toString()))
@@ -127,22 +128,59 @@ public class ManufacturerResource {
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
 	@PutMapping("/manufacturers")
-	@PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.USER + "\")")
+	@PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.USER + "\") or hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
 	public ResponseEntity<Manufacturer> updateManufacturer(@RequestBody Manufacturer manufacturer)
 			throws URISyntaxException {
 		log.debug("REST request to update Manufacturer : {}", manufacturer);
-		Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-		String user = auth.getName();
+		Authentication auth = SecurityContextHolder.getContext().getAuthentication();		
+		String userLogged = auth.getName();
+		Collection<? extends GrantedAuthority> grantedAutorities =  auth.getAuthorities();		
+		Boolean granted = false;
+		for (Iterator<? extends GrantedAuthority> iterator = grantedAutorities.iterator(); iterator.hasNext();) {
+			GrantedAuthority grantedAuthority = (GrantedAuthority) iterator.next();
+			if (grantedAuthority.getAuthority().equalsIgnoreCase("ROLE_ADMIN")) {
+				granted = true;
+				break;
+			}
+		}
+		if (manufacturer.getId() == null) {			
+			throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
+		} 
 		Optional<Manufacturer> manufacturerBD = manufacturerRepository.findById(manufacturer.getId());
-
+		
 		if (!manufacturerBD.isEmpty()) {
 			User internalUser = manufacturerBD.get().getInternalUser();
 			if (internalUser != null) {
-				if (user.equalsIgnoreCase(internalUser.getLogin())) {
+				if (userLogged.equalsIgnoreCase(internalUser.getLogin()) || granted) {
 					if (manufacturer.getId() == null) {
 						throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
 					}
 					manufacturer.setInternalUser(internalUser);
+					Manufacturer result = manufacturerRepository.save(manufacturer);
+					manufacturerSearchRepository.save(result);
+					return ResponseEntity.ok().headers(HeaderUtil.createEntityUpdateAlert(applicationName, true,
+							ENTITY_NAME, manufacturer.getId().toString())).body(result);
+				}
+			} else {
+				UserDTO userDto = new UserDTO();
+				userDto.setActivated(true);
+				userDto.setCreatedBy(userLogged);       
+				userDto.setCreatedDate(Instant.now());
+				userDto.setEmail(manufacturer.getManufacturerName() + "@gmail.com");
+				userDto.setFirstName(manufacturer.getManufacturerName());
+				userDto.setLastName(manufacturer.getManufacturerName());
+				userDto.setLogin(manufacturer.getManufacturerName());		
+		        Set<String> authorities = new HashSet<String>();     
+		        authorities.add("ROLE_USER");
+		        userDto.setAuthorities(authorities);        
+		        User user = userService.registerUser(userDto, manufacturer.getManufacturerName());
+		        user.setActivated(true);		     
+		        
+		        if (userLogged.equalsIgnoreCase(user.getLogin()) || granted) {
+					if (manufacturer.getId() == null) {
+						throw new BadRequestAlertException("Invalid id", ENTITY_NAME, "idnull");
+					}
+					manufacturer.setInternalUser(user);
 					Manufacturer result = manufacturerRepository.save(manufacturer);
 					manufacturerSearchRepository.save(result);
 					return ResponseEntity.ok().headers(HeaderUtil.createEntityUpdateAlert(applicationName, true,

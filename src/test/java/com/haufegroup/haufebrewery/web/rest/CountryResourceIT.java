@@ -238,6 +238,7 @@ public class CountryResourceIT {
 
     @Test
     @Transactional
+    @WithMockUser(username = "Admin", password = "admin", authorities = "ROLE_ADMIN")
     public void deleteCountry() throws Exception {
         // Initialize the database
         countryRepository.saveAndFlush(country);

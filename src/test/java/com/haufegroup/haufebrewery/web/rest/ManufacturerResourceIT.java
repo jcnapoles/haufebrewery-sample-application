@@ -1,13 +1,26 @@
 package com.haufegroup.haufebrewery.web.rest;
 
-import com.haufegroup.haufebrewery.HaufebreweryApp;
-import com.haufegroup.haufebrewery.domain.Manufacturer;
-import com.haufegroup.haufebrewery.repository.ManufacturerRepository;
-import com.haufegroup.haufebrewery.repository.search.ManufacturerSearchRepository;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.elasticsearch.index.query.QueryBuilders.queryStringQuery;
+import static org.hamcrest.Matchers.hasItem;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+
+import java.util.Collections;
+import java.util.List;
+
+import javax.persistence.EntityManager;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,16 +32,11 @@ import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
-import javax.persistence.EntityManager;
-import java.util.Collections;
-import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.elasticsearch.index.query.QueryBuilders.queryStringQuery;
-import static org.hamcrest.Matchers.hasItem;
-import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import com.haufegroup.haufebrewery.HaufebreweryApp;
+import com.haufegroup.haufebrewery.domain.Manufacturer;
+import com.haufegroup.haufebrewery.repository.ManufacturerRepository;
+import com.haufegroup.haufebrewery.repository.search.ManufacturerSearchRepository;
 
 /**
  * Integration tests for the {@link ManufacturerResource} REST controller.
@@ -91,6 +99,7 @@ public class ManufacturerResourceIT {
 
     @Test
     @Transactional
+    @WithMockUser(username = "Admin", password = "admin", authorities = "ROLE_ADMIN")
     public void createManufacturer() throws Exception {
         int databaseSizeBeforeCreate = manufacturerRepository.findAll().size();
         // Create the Manufacturer
@@ -111,6 +120,7 @@ public class ManufacturerResourceIT {
 
     @Test
     @Transactional
+    @WithMockUser(username = "Admin", password = "admin", authorities = "ROLE_ADMIN")
     public void createManufacturerWithExistingId() throws Exception {
         int databaseSizeBeforeCreate = manufacturerRepository.findAll().size();
 
@@ -169,6 +179,7 @@ public class ManufacturerResourceIT {
 
     @Test
     @Transactional
+    @WithMockUser(username = "Admin", password = "admin", authorities = "ROLE_ADMIN")
     public void updateManufacturer() throws Exception {
         // Initialize the database
         manufacturerRepository.saveAndFlush(manufacturer);
@@ -199,6 +210,7 @@ public class ManufacturerResourceIT {
 
     @Test
     @Transactional
+    @WithMockUser(username = "Admin", password = "admin", authorities = "ROLE_ADMIN")
     public void updateNonExistingManufacturer() throws Exception {
         int databaseSizeBeforeUpdate = manufacturerRepository.findAll().size();
 
@@ -218,6 +230,7 @@ public class ManufacturerResourceIT {
 
     @Test
     @Transactional
+    @WithMockUser(username = "Admin", password = "admin", authorities = "ROLE_ADMIN")
     public void deleteManufacturer() throws Exception {
         // Initialize the database
         manufacturerRepository.saveAndFlush(manufacturer);
@@ -239,6 +252,7 @@ public class ManufacturerResourceIT {
 
     @Test
     @Transactional
+    @WithMockUser(username = "Admin", password = "admin", authorities = "ROLE_ADMIN")
     public void searchManufacturer() throws Exception {
         // Configure the mock search repository
         // Initialize the database

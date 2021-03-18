@@ -76,7 +76,7 @@ public class CountryResource {
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PostMapping("/countries")
-    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.USER + "\")")
     public ResponseEntity<Country> createCountry(@RequestBody Country country) throws URISyntaxException {
         log.debug("REST request to save Country : {}", country);
         if (country.getId() != null) {
@@ -99,7 +99,7 @@ public class CountryResource {
      * @throws URISyntaxException if the Location URI syntax is incorrect.
      */
     @PutMapping("/countries")
-    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.ADMIN + "\")")
+    @PreAuthorize("hasAuthority(\"" + AuthoritiesConstants.USER + "\")")
     public ResponseEntity<Country> updateCountry(@RequestBody Country country) throws URISyntaxException {
         log.debug("REST request to update Country : {}", country);
         if (country.getId() == null) {
